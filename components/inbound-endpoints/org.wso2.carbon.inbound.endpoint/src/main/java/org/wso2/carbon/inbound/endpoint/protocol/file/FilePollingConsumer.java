@@ -64,6 +64,7 @@ public class FilePollingConsumer {
     private Long lastRanTime;
     private int lastCycle;
     private FileInjectHandler injectHandler;
+    private Long minimumAge;
 
     private String fileURI;
     private FileObject fileObject;
@@ -431,6 +432,19 @@ public class FilePollingConsumer {
             }
 
         }
+        
+        minimumAge = null;
+        
+        String strMinimumAge = vfsProperties.getProperty(VFSConstants.MINIMUM_AGE);
+        
+        if(strMinimumAge != null) {
+        	try {
+        		minimumAge = Long.parseLong(strMinimumAge);
+        	} catch (Exception e) {
+        		minimumAge = null;
+				log.warn("VFS Minimum Age not set properly. Current value is: " + strMinimumAge, e);
+			}       	
+        }
     }
 
     private Map<String, String> parseSchemeFileOptions(String fileURI) {
@@ -522,11 +536,12 @@ public class FilePollingConsumer {
                 continue;
             }
             boolean isFailedRecord = VFSUtils.isFailRecord(fsManager, child);
+            boolean hasMinimumAge = VFSUtils.hasMinimumAge(child, minimumAge);
             
             // child's file name matches the file name pattern or process all
             // files now we try to get the lock and process
             if ((strFilePattern == null || child.getName().getBaseName().matches(strFilePattern))
-                    && !isFailedRecord) {
+                    && !isFailedRecord && hasMinimumAge) {
 
                 if (log.isDebugEnabled()) {
                     log.debug("Matching file : " + child.getName().getBaseName());
@@ -610,6 +625,8 @@ public class FilePollingConsumer {
                     log.debug("File '" + VFSUtils.maskURLPassword(fileObject.getURL().toString())
                             + "' has been marked as a failed record, it will not " + "process");
                 }
+            } else if (!hasMinimumAge) {
+            	log.debug("File does not have the minimum age: " + child.getName().getBaseName());
             }
 
             //close the file system after processing
